@@ -121,5 +121,28 @@ current buffer."
                 :description "Optional name of buffer to modify; when omitted, use the current buffer."))
  :category "OS")
 
+(defun eai-tool-library-os--write-file (filename contents)
+  "Write CONTENTS to FILENAME, creating parent directories if needed.
+Returns the absolute path of the file written."
+  (eai-tool-library--debug-log (format "write-file %s" filename))
+  (let ((path (expand-file-name filename)))
+    (make-directory (file-name-directory path) t)
+    (with-temp-file path
+      (insert contents))
+    (format "Wrote %d bytes to %s" (length contents) path)))
+
+(eai-tool-library-make-tools-and-register
+ 'eai-tool-library-os-tools-maybe-safe
+ :function #'eai-tool-library-os--write-file
+ :name  "write-file"
+ :description "Write CONTENTS to FILENAME, creating parent directories if needed. Overwrites existing files."
+ :args (list '(:name "filename"
+                     :type string
+                     :description "The file path to write to.")
+             '(:name "contents"
+                     :type string
+                     :description "The text to write into the file."))
+ :category "OS")
+
 (provide 'eai-tool-library-os)
 ;;; eai-tool-library-os.el ends here
