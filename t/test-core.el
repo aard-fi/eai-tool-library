@@ -194,5 +194,65 @@
       (when (buffer-live-p buf)
         (kill-buffer buf)))))
 
+;;; eai-tool-library-write-action
+
+(ert-deftest etl-core/write-action/nil-file ()
+  "A nil file (buffer without file) always returns ask."
+  (should (eq 'ask (eai-tool-library-write-action nil))))
+
+(ert-deftest etl-core/write-action/outside-project-default ()
+  "Files outside the project default to eai-tool-library-write-outside-project."
+  (let ((eai-tool-library-write-policy nil)
+        (eai-tool-library-write-outside-project 'deny))
+    (should (eq 'deny (eai-tool-library-write-action "/tmp/etl-write-policy-test.txt")))))
+
+(ert-deftest etl-core/write-action/explicit-policy-wins ()
+  "A matching explicit policy entry overrides defaults."
+  (let ((eai-tool-library-write-policy '(("/tmp" . allow)))
+        (eai-tool-library-write-outside-project 'deny))
+    (should (eq 'allow (eai-tool-library-write-action "/tmp/etl-write-policy-test.txt")))))
+
+(ert-deftest etl-core/write-action/longest-policy-wins ()
+  "The longest matching directory in the policy wins."
+  (let ((eai-tool-library-write-policy '(("/" . deny)
+                                         ("/tmp" . allow))))
+    (should (eq 'allow (eai-tool-library-write-action "/tmp/etl-write-policy-test.txt")))))
+
+;;; eai-tool-library-write-confirm-p
+
+(ert-deftest etl-core/write-confirm-p/ask-returns-t ()
+  "Returns non-nil when the action is ask."
+  (let ((eai-tool-library-write-policy '(("/tmp" . ask))))
+    (should (eai-tool-library-write-confirm-p "/tmp/test.txt"))))
+
+(ert-deftest etl-core/write-confirm-p/allow-returns-nil ()
+  "Returns nil when the action is allow."
+  (let ((eai-tool-library-write-policy '(("/tmp" . allow))))
+    (should-not (eai-tool-library-write-confirm-p "/tmp/test.txt"))))
+
+(ert-deftest etl-core/write-confirm-p/deny-returns-nil ()
+  "Returns nil when the action is deny."
+  (let ((eai-tool-library-write-policy '(("/tmp" . deny))))
+    (should-not (eai-tool-library-write-confirm-p "/tmp/test.txt"))))
+
+;;; eai-tool-library-write-deny-check
+
+(ert-deftest etl-core/write-deny-check/deny-signals-error ()
+  "Signals an error when the action is deny."
+  (let ((eai-tool-library-write-policy '(("/tmp" . deny))))
+    (should-error
+     (eai-tool-library-write-deny-check "/tmp/test.txt")
+     :type 'error)))
+
+(ert-deftest etl-core/write-deny-check/allow-ok ()
+  "Does nothing when the action is allow."
+  (let ((eai-tool-library-write-policy '(("/tmp" . allow))))
+    (eai-tool-library-write-deny-check "/tmp/test.txt")))
+
+(ert-deftest etl-core/write-deny-check/ask-ok ()
+  "Does nothing when the action is ask."
+  (let ((eai-tool-library-write-policy '(("/tmp" . ask))))
+    (eai-tool-library-write-deny-check "/tmp/test.txt")))
+
 (provide 'test-core)
 ;;; test-core.el ends here

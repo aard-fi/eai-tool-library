@@ -121,11 +121,16 @@ current buffer."
                 :description "Optional name of buffer to modify; when omitted, use the current buffer."))
  :category "OS")
 
+(defun eai-tool-library-os--write-file-confirm (filename _contents)
+  "Return non-nil if write-file needs confirmation for FILENAME."
+  (eai-tool-library-write-confirm-p (expand-file-name filename)))
+
 (defun eai-tool-library-os--write-file (filename contents)
   "Write CONTENTS to FILENAME, creating parent directories if needed.
 Returns the absolute path of the file written."
   (eai-tool-library--debug-log (format "write-file %s" filename))
   (let ((path (expand-file-name filename)))
+    (eai-tool-library-write-deny-check path)
     (make-directory (file-name-directory path) t)
     (with-temp-file path
       (insert contents))
@@ -142,7 +147,8 @@ Returns the absolute path of the file written."
              '(:name "contents"
                      :type string
                      :description "The text to write into the file."))
- :category "OS")
+ :category "OS"
+ :confirm #'eai-tool-library-os--write-file-confirm)
 
 (provide 'eai-tool-library-os)
 ;;; eai-tool-library-os.el ends here

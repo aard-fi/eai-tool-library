@@ -76,7 +76,7 @@ the result"
   :type 'string)
 
 (defconst eai-tool-library-dir (file-name-directory (or load-file-name
-                                                          buffer-file-name)))
+                                                        buffer-file-name)))
 
 (defun eai-tool-library-append-tools (var tools)
   "Append TOOLS to the list stored in variable VAR non-destructively."
@@ -113,7 +113,7 @@ the result"
 (defun eai-tool-library-make-tools-and-register (list &rest args)
   "Create tools for any known LLMS and add them to LIST"
   (eai-tool-library-append-tools list
-   (apply #'eai-tool-library-make-tools args)))
+                                 (apply #'eai-tool-library-make-tools args)))
 
 (defun eai-tool-library-tool--accessor (tool slot)
   "Return SLOT value from TOOL if it is a known type and accessor exists, else nil.
@@ -177,11 +177,11 @@ Ignores tools for which required accessors are not available."
                       (_ (error "Unknown tool type encountered: %s" (type-of tool)))))
          (container-var-sym (intern (format "eai-tool-library-%s-tools-var" tool-type))))
     (when (and (boundp container-var-sym)
-             (symbol-value container-var-sym))
-        (let ((target-var-sym (symbol-value container-var-sym)))
-          (unless (listp (symbol-value target-var-sym))
-            (set target-var-sym '()))
-          (set target-var-sym (cons tool (symbol-value target-var-sym)))))))
+               (symbol-value container-var-sym))
+      (let ((target-var-sym (symbol-value container-var-sym)))
+        (unless (listp (symbol-value target-var-sym))
+          (set target-var-sym '()))
+        (set target-var-sym (cons tool (symbol-value target-var-sym)))))))
 
 (defun eai-tool-library-load-module (module-name)
   "Load `eai-tool-library-MODULE-NAME' and add its tools to `gptel-tools'.
@@ -297,6 +297,84 @@ Returns the buffer object."
                   (set-visited-file-name resolved-path))
                 buf)
             (error "File %s does not exist" resolved-path)))))))
+
+;; write permissions
+
+(defcustom eai-tool-library-write-policy nil
+  "Where tools may write, as an alist of (DIRECTORY . ACTION).
+ACTION is `allow' (write without asking), `ask' (show the change to
+the user for review) or `deny'.  The entry with the longest DIRECTORY
+containing the target file wins.  Files matching no entry use
+`eai-tool-library-write-in-project' inside the current project and
+`eai-tool-library-write-outside-project' elsewhere.
+
+Keep this in your own configuration: a project must not be able to
+grant itself write access."
+  :group 'eai-tool-library
+  :type '(alist :key-type directory
+                :value-type (choice (const allow) (const ask) (const deny))))
+
+(defcustom eai-tool-library-write-in-project 'ask
+  "Write action for files in the current project without a policy entry."
+  :group 'eai-tool-library
+  :type '(choice (const allow) (const ask) (const deny)))
+
+(defcustom eai-tool-library-write-outside-project 'deny
+  "Write action for files outside the current project without a policy entry."
+  :group 'eai-tool-library
+  :type '(choice (const allow) (const ask) (const deny)))
+
+(defun eai-tool-library--path-in-directory-p (file dir)
+  "Return non-nil if true name FILE is inside directory DIR."
+  (string-prefix-p (file-name-as-directory (file-truename dir)) file
+                   (file-name-case-insensitive-p file)))
+
+(defun eai-tool-library-write-action (file)
+  "Return the write action for FILE: `allow', `ask' or `deny'.
+FILE nil stands for a buffer without a file, which is always `ask'.
+The current project is the one of the current buffer; tools run in
+the buffer their request came from.  See `eai-tool-library-write-policy'."
+  (if (not file)
+      'ask
+    (let ((file (file-truename file))
+          best)
+      (dolist (entry eai-tool-library-write-policy)
+        (when (and (eai-tool-library--path-in-directory-p file (car entry))
+                   (or (not best)
+                       (> (length (file-truename (car entry)))
+                          (length (file-truename (car best))))))
+          (setq best entry)))
+      (cond
+       (best (cdr best))
+       ((when-let* ((project (project-current)))
+          (eai-tool-library--path-in-directory-p file (project-root project)))
+        eai-tool-library-write-in-project)
+       (t eai-tool-library-write-outside-project)))))
+
+(defun eai-tool-library-allow-project-writes (&optional save)
+  "Let tools write in the current project without asking.
+With prefix argument SAVE, also save the setting with Customize."
+  (interactive "P")
+  (let ((root (expand-file-name
+               (or (when-let* ((project (project-current)))
+                     (project-root project))
+                   (user-error "Not in a project")))))
+    (setf (alist-get root eai-tool-library-write-policy nil nil #'equal) 'allow)
+    (when save
+      (customize-save-variable 'eai-tool-library-write-policy
+                               eai-tool-library-write-policy))
+    (message "Tools may write in %s without asking%s"
+             root (if save " (saved)" ""))))
+
+(defun eai-tool-library-write-confirm-p (file)
+  "Return non-nil if writing FILE needs user confirmation."
+  (eq (eai-tool-library-write-action file) 'ask))
+
+(defun eai-tool-library-write-deny-check (file)
+  "Signal an error if writing FILE is denied by policy.
+Does nothing if the action is `allow' or `ask'."
+  (when (eq (eai-tool-library-write-action file) 'deny)
+    (error "Write denied by policy: %s" file)))
 
 (provide 'eai-tool-library)
 

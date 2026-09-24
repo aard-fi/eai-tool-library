@@ -134,5 +134,31 @@
             (should (string= (expand-file-name "/tmp") result))))
       (kill-buffer buf))))
 
+;;; eai-tool-library-os--write-file policy integration
+
+(ert-deftest etl-os/write-file/deny-outside-project ()
+  "Writing outside the project is denied by default."
+  (let ((eai-tool-library-write-policy nil)
+        (eai-tool-library-write-outside-project 'deny)
+        (tmpfile "/tmp/etl-write-deny-test.txt"))
+    (should-error
+     (eai-tool-library-os--write-file tmpfile "should not appear")
+     :type 'error)
+    (should-not (file-exists-p tmpfile))))
+
+(ert-deftest etl-os/write-file/allow-with-policy ()
+  "Writing is allowed when policy explicitly allows the directory."
+  (let ((eai-tool-library-write-policy '(("/tmp" . allow)))
+        (tmpfile "/tmp/etl-write-allow-test.txt"))
+    (unwind-protect
+        (progn
+          (eai-tool-library-os--write-file tmpfile "hello policy")
+          (should (file-exists-p tmpfile))
+          (should (string= "hello policy" (with-temp-buffer
+                                            (insert-file-contents tmpfile)
+                                            (buffer-string)))))
+      (when (file-exists-p tmpfile)
+        (delete-file tmpfile)))))
+
 (provide 'test-os)
 ;;; test-os.el ends here
