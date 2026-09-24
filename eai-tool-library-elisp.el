@@ -101,6 +101,10 @@ Use BUFFER or current buffer if BUFFER is nil."
             (insert new-string)))
       (message "Function `%s` not found for replacement" function-name))))
 
+(defun eai-tool-library-elisp--smerge-replace-defun-region-confirm (_function-name _new-string &optional buffer)
+  "Return non-nil if smerge-replace-defun-region needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p (or buffer (current-buffer))))
+
 (defun eai-tool-library-elisp--smerge-replace-defun-region (function-name new-string &optional buffer)
   "Insert smerge conflict markers for FUNCTION-NAME region with NEW-STRING.
 
@@ -112,6 +116,7 @@ Operate in BUFFER or current buffer if BUFFER is nil."
     (if (not bounds)
         (message "Function `%s` not found in buffer %s" function-name (buffer-name buf))
       (with-current-buffer buf
+        (eai-tool-library-write-deny-check (buffer-file-name))
         (setq old-text (buffer-substring-no-properties (car bounds) (cdr bounds)))
         (setq conflict-text
               (concat "<<<<<<< FUNCTION BEFORE REPLACE\n"
@@ -139,7 +144,8 @@ Operate in BUFFER or current buffer if BUFFER is nil."
              '(:name "buffer"
                      :type string
                      :description "The buffer to perform the replacement"))
- :category "elisp")
+ :category "elisp"
+ :confirm #'eai-tool-library-elisp--smerge-replace-defun-region-confirm)
 
 (defun eai-tool-library-elisp-variable-doc (name)
   "Try to return documentation for variable NAME"
@@ -161,11 +167,11 @@ Operate in BUFFER or current buffer if BUFFER is nil."
 
 (defun eai-tool-library-elisp-function-doc (name)
   "Try to return documentation for function NAME"
-    (eai-tool-library--debug-log (format "elisp-function-doc: %s" name))
-    (let ((func (intern-soft name)))
-      (if (and func (fboundp func))
-          (documentation func)
-        (format "No documentation found for function: %s" name))))
+  (eai-tool-library--debug-log (format "elisp-function-doc: %s" name))
+  (let ((func (intern-soft name)))
+    (if (and func (fboundp func))
+        (documentation func)
+      (format "No documentation found for function: %s" name))))
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-elisp-tools
@@ -180,24 +186,24 @@ Operate in BUFFER or current buffer if BUFFER is nil."
 (defun eai-tool-library-elisp-describe-symbol (name)
   "Return the source code for function or variable NAME as a string.
 If source isn't found, falls back to the Emacs Lisp object sexp."
-       (let* ((sym (if (symbolp name) name (intern name)))
-              (callable (or (functionp sym) (macrop sym)))
-              (find-fn (if callable #'find-function-noselect #'find-variable-noselect)))
-         (condition-case nil
-             (let* ((res (funcall find-fn sym))
-                    (buf (car res))
-                    (pos (cdr res)))
-               (with-current-buffer buf
-                 (save-excursion
-                   (goto-char pos)
-                   (buffer-substring-no-properties
-                    (point)
-                    (progn (end-of-defun) (point))))))
-           (error
-            (let ((obj (if callable
-                           (symbol-function sym)
-                         (symbol-value sym))))
-              (pp-to-string obj))))))
+  (let* ((sym (if (symbolp name) name (intern name)))
+         (callable (or (functionp sym) (macrop sym)))
+         (find-fn (if callable #'find-function-noselect #'find-variable-noselect)))
+    (condition-case nil
+        (let* ((res (funcall find-fn sym))
+               (buf (car res))
+               (pos (cdr res)))
+          (with-current-buffer buf
+            (save-excursion
+              (goto-char pos)
+              (buffer-substring-no-properties
+               (point)
+               (progn (end-of-defun) (point))))))
+      (error
+       (let ((obj (if callable
+                      (symbol-function sym)
+                    (symbol-value sym))))
+         (pp-to-string obj))))))
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-elisp-tools

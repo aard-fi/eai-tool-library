@@ -220,10 +220,15 @@ If there is no window in that direction, return nil."
                      :description "The buffer to get the size from."))
  :category "emacs-buffer")
 
+(defun eai-tool-library-buffer--replace-region-confirm (buffer _from _to _text)
+  "Return non-nil if replace-region needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p buffer))
+
 (defun eai-tool-library-buffer--replace-region (buffer from to text)
   "Replace text in BUFFER from FROM to TO with TEXT"
   (eai-tool-library--debug-log (format "replace-region %s->%s in %s with %s" from to buffer text))
   (with-current-buffer (eai-tool-library--get-buffer buffer)
+    (eai-tool-library-write-deny-check (buffer-file-name))
     (delete-region from to)
     (goto-char from)
     (insert text)))
@@ -245,12 +250,18 @@ If there is no window in that direction, return nil."
              '(:name "text"
                      :type string
                      :description "The text to replace the region with."))
- :category "emacs-buffer")
+ :category "emacs-buffer"
+ :confirm #'eai-tool-library-buffer--replace-region-confirm)
+
+(defun eai-tool-library-buffer--remove-region-confirm (buffer _from _to)
+  "Return non-nil if remove-region needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p buffer))
 
 (defun eai-tool-library-buffer--remove-region (buffer from to)
   "Remove region from FROM to TO in buffer BUFFER"
   (eai-tool-library--debug-log (format "remove-region %s->%s from %s" from to buffer))
   (with-current-buffer (eai-tool-library--get-buffer buffer)
+    (eai-tool-library-write-deny-check (buffer-file-name))
     (delete-region from to)))
 
 (eai-tool-library-make-tools-and-register
@@ -267,12 +278,18 @@ If there is no window in that direction, return nil."
              '(:name "to"
                      :type integer
                      :description "The end of the region."))
- :category "emacs-buffer")
+ :category "emacs-buffer"
+ :confirm #'eai-tool-library-buffer--remove-region-confirm)
+
+(defun eai-tool-library-buffer--insert-at-confirm (buffer _at _text)
+  "Return non-nil if insert-at needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p buffer))
 
 (defun eai-tool-library-buffer--insert-at (buffer at text)
   "Move point in buffer BUFFER to AT, and then insert TEXT"
   (eai-tool-library--debug-log (format "insert-at %s at %s in %s" text at buffer))
   (with-current-buffer (eai-tool-library--get-buffer buffer)
+    (eai-tool-library-write-deny-check (buffer-file-name))
     (goto-char (+ 1 at))
     (insert text)))
 
@@ -290,7 +307,8 @@ If there is no window in that direction, return nil."
              '(:name "text"
                      :type string
                      :description "The text to insert with."))
- :category "emacs-buffer")
+ :category "emacs-buffer"
+ :confirm #'eai-tool-library-buffer--insert-at-confirm)
 
 (defun eai-tool-library-buffer--number (value)
   "Return VALUE as a number; LLMs sometimes send numbers as strings."
@@ -367,6 +385,10 @@ to the last line."
                      :description "Last line to read. Defaults to the last line."))
  :category "emacs-buffer")
 
+(defun eai-tool-library-buffer--replace-text-confirm (buffer _old _new &optional _all)
+  "Return non-nil if replace-text needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p buffer))
+
 (defun eai-tool-library-buffer--replace-text (buffer old new &optional all)
   "Replace the exact text OLD with NEW in BUFFER.
 OLD must occur exactly once, unless ALL is true, in which case every
@@ -379,6 +401,7 @@ with some context."
   (when (string-empty-p old)
     (error "OLD must not be empty"))
   (with-current-buffer (eai-tool-library--get-buffer buffer)
+    (eai-tool-library-write-deny-check (buffer-file-name))
     (eai-tool-library-buffer--refresh)
     (save-excursion
       (save-restriction
@@ -449,7 +472,8 @@ with some context."
                      :type boolean
                      :optional t
                      :description "Replace every occurrence instead of requiring exactly one."))
- :category "emacs-buffer")
+ :category "emacs-buffer"
+ :confirm #'eai-tool-library-buffer--replace-text-confirm)
 
 ;; the following tools directly make existing functions available
 (eai-tool-library-make-tools-and-register

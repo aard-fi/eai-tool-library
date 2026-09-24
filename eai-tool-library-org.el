@@ -99,6 +99,10 @@ The caller should check (car result) for position or (cdr result) for error."
 
 ;;; Org tools
 
+(defun eai-tool-library-org--archive-subtree-confirm (buffer _heading-name &optional _index)
+  "Return non-nil if org-archive-subtree needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p buffer))
+
 (defun eai-tool-library-org--archive-subtree (buffer heading-name &optional index)
   "Archive the subtree at HEADING-NAME in BUFFER.
 
@@ -108,6 +112,7 @@ Returns a success or error message."
   (with-current-buffer buffer
     (unless (derived-mode-p 'org-mode)
       (error "Buffer %s is not in org-mode" buffer))
+    (eai-tool-library-write-deny-check (buffer-file-name))
     (let ((resolved (eai-tool-library-org--resolve-heading buffer heading-name index)))
       (if (cdr resolved)
           (cdr resolved)
@@ -129,7 +134,12 @@ Returns a success or error message."
                      :type integer
                      :description "Optional 0-based index to disambiguate when multiple headings match."
                      :optional t))
- :category "emacs-org")
+ :category "emacs-org"
+ :confirm #'eai-tool-library-org--archive-subtree-confirm)
+
+(defun eai-tool-library-org--todo-confirm (buffer _heading-name _state &optional _index)
+  "Return non-nil if org-todo needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p buffer))
 
 (defun eai-tool-library-org--todo (buffer heading-name state &optional index)
   "Set the TODO state of HEADING-NAME in BUFFER to STATE.
@@ -140,6 +150,7 @@ Returns a success or error message."
   (with-current-buffer buffer
     (unless (derived-mode-p 'org-mode)
       (error "Buffer %s is not in org-mode" buffer))
+    (eai-tool-library-write-deny-check (buffer-file-name))
     (let ((resolved (eai-tool-library-org--resolve-heading buffer heading-name index)))
       (if (cdr resolved)
           (cdr resolved)
@@ -166,7 +177,12 @@ Returns a success or error message."
                      :type integer
                      :description "Optional 0-based index to disambiguate when multiple headings match."
                      :optional t))
- :category "emacs-org")
+ :category "emacs-org"
+ :confirm #'eai-tool-library-org--todo-confirm)
+
+(defun eai-tool-library-org--set-property-confirm (buffer _heading-name _property _value &optional _index)
+  "Return non-nil if org-set-property needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p buffer))
 
 (defun eai-tool-library-org--set-property (buffer heading-name property value &optional index)
   "Set PROPERTY to VALUE for HEADING-NAME in BUFFER.
@@ -177,6 +193,7 @@ Returns a success or error message."
   (with-current-buffer buffer
     (unless (derived-mode-p 'org-mode)
       (error "Buffer %s is not in org-mode" buffer))
+    (eai-tool-library-write-deny-check (buffer-file-name))
     (let ((resolved (eai-tool-library-org--resolve-heading buffer heading-name index)))
       (if (cdr resolved)
           (cdr resolved)
@@ -205,7 +222,8 @@ Returns a success or error message."
                      :type integer
                      :description "Optional 0-based index to disambiguate when multiple headings match."
                      :optional t))
- :category "emacs-org")
+ :category "emacs-org"
+ :confirm #'eai-tool-library-org--set-property-confirm)
 
 (defun eai-tool-library-org--get-property (buffer heading-name property &optional index)
   "Return the value of PROPERTY for HEADING-NAME in BUFFER.
@@ -280,6 +298,10 @@ Returns the subtree contents as a string."
                      :optional t))
  :category "emacs-org")
 
+(defun eai-tool-library-org--replace-subtree-confirm (buffer _heading-name _new-string &optional _index)
+  "Return non-nil if org-replace-subtree needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p buffer))
+
 (defun eai-tool-library-org--replace-subtree (buffer heading-name new-string &optional index)
   "Replace the subtree at HEADING-NAME in BUFFER with NEW-STRING.
 
@@ -292,6 +314,7 @@ the heading is replaced."
   (with-current-buffer buffer
     (unless (derived-mode-p 'org-mode)
       (error "Buffer %s is not in org-mode" buffer))
+    (eai-tool-library-write-deny-check (buffer-file-name))
     (let ((resolved (eai-tool-library-org--resolve-heading buffer heading-name index)))
       (if (cdr resolved)
           (cdr resolved)
@@ -331,7 +354,8 @@ the heading is replaced."
                      :type integer
                      :description "Optional 0-based index to disambiguate when multiple headings match."
                      :optional t))
- :category "emacs-org")
+ :category "emacs-org"
+ :confirm #'eai-tool-library-org--replace-subtree-confirm)
 
 (provide 'eai-tool-library-org)
 

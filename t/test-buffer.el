@@ -280,7 +280,8 @@ The buffer is killed after BODY completes."
   "Evaluate BODY with VAR bound to a temporary .el file holding CONTENT.
 The file and any buffer visiting it are removed afterwards."
   (declare (indent 2))
-  `(let ((,var (make-temp-file "etl-buf-" nil ".el" ,content)))
+  `(let ((,var (make-temp-file "etl-buf-" nil ".el" ,content))
+         (eai-tool-library-write-policy '(("/tmp" . allow))))
      (unwind-protect
          (progn ,@body)
        (when-let* ((buf (find-buffer-visiting ,var)))

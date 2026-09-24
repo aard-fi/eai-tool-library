@@ -376,6 +376,29 @@ Does nothing if the action is `allow' or `ask'."
   (when (eq (eai-tool-library-write-action file) 'deny)
     (error "Write denied by policy: %s" file)))
 
+(defun eai-tool-library--buffer-file-for-policy (buffer-or-path)
+  "Return the file path associated with BUFFER-OR-PATH for policy checks.
+BUFFER-OR-PATH may be a buffer object, buffer name, or file path string.
+Returns nil if the buffer has no file.  Does not create new buffers."
+  (let ((buf (cond
+              ((bufferp buffer-or-path) buffer-or-path)
+              ((not (stringp buffer-or-path)) nil)
+              ((get-buffer buffer-or-path))
+              (t nil))))
+    (when buf
+      (or (buffer-file-name buf)
+          ;; If the string looks like an existing file path with a visiting buffer
+          (when (file-exists-p buffer-or-path)
+            (let ((vbuf (get-file-buffer (expand-file-name buffer-or-path))))
+              (when vbuf (buffer-file-name vbuf))))))))
+
+(defun eai-tool-library--buffer-modify-confirm-p (buffer-or-path)
+  "Return non-nil if modifying BUFFER-OR-PATH needs user confirmation.
+Uses the buffer's associated file for the policy check, or `ask' if
+there is no file."
+  (eai-tool-library-write-confirm-p
+   (eai-tool-library--buffer-file-for-policy buffer-or-path)))
+
 (provide 'eai-tool-library)
 
 ;;; eai-tool-library.el ends here

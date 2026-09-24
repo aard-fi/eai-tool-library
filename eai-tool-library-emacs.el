@@ -69,6 +69,11 @@
                      :optional t))
  :category "emacs")
 
+(defun eai-tool-library-emacs--save-buffer-confirm (&optional buffer-name)
+  "Return non-nil if save-buffer needs confirmation for BUFFER-NAME."
+  (let ((buf (if buffer-name (get-buffer buffer-name) (current-buffer))))
+    (eai-tool-library-write-confirm-p (when buf (buffer-file-name buf)))))
+
 (defun eai-tool-library-emacs--save-buffer (&optional buffer-name)
   "Save BUFFER-NAME to its associated file.
 BUFFER-NAME is a string or buffer object. If nil, use the current
@@ -83,6 +88,7 @@ buffer has no file association."
           (error "Buffer %s has no associated file; use write-file instead"
                  (buffer-name buffer))
         (let ((file (buffer-file-name)))
+          (eai-tool-library-write-deny-check file)
           (save-buffer)
           (format "Saved %s to %s" (buffer-name buffer) file))))))
 
@@ -95,7 +101,8 @@ buffer has no file association."
                      :type string
                      :description "Name of the buffer to save. Uses current buffer if omitted."
                      :optional t))
- :category "emacs")
+ :category "emacs"
+ :confirm #'eai-tool-library-emacs--save-buffer-confirm)
 
 (provide 'eai-tool-library-emacs)
 ;;; eai-tool-library-emacs.el ends here

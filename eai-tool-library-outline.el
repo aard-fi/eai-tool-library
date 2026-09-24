@@ -234,6 +234,10 @@ when available, falls back to imenu, then to outline-regexp matching."
       (setq result (eai-tool-library-outline--regex buffer)))
     result))
 
+(defun eai-tool-library-outline--replace-section-confirm (buffer _section-name _new-string)
+  "Return non-nil if outline-replace-section needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p buffer))
+
 (defun eai-tool-library-outline--replace-section (buffer section-name new-string)
   "Replace the outline section named SECTION-NAME in BUFFER with NEW-STRING.
 
@@ -250,6 +254,7 @@ Returns a message indicating success or failure."
       (let ((from (plist-get match :from))
             (to (plist-get match :to)))
         (with-current-buffer buf
+          (eai-tool-library-write-deny-check (buffer-file-name))
           (delete-region from to)
           (goto-char from)
           (insert new-string))
@@ -269,7 +274,8 @@ Returns a message indicating success or failure."
              '(:name "new-string"
                      :type string
                      :description "The new text to replace the section with."))
- :category "emacs-outline")
+ :category "emacs-outline"
+ :confirm #'eai-tool-library-outline--replace-section-confirm)
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-outline-tools
@@ -315,6 +321,10 @@ the section is not found."
 
 ;;; inserting
 
+(defun eai-tool-library-outline--insert-before-confirm (buffer _section-name _new-string)
+  "Return non-nil if outline-insert-before needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p buffer))
+
 (defun eai-tool-library-outline--insert-before (buffer section-name new-string)
   "Insert NEW-STRING before the outline section named SECTION-NAME in BUFFER.
 
@@ -331,6 +341,7 @@ whitespace is added automatically around the inserted text."
       (let ((from (plist-get match :from))
             (sep (eai-tool-library-outline--section-separator buf)))
         (with-current-buffer buf
+          (eai-tool-library-write-deny-check (buffer-file-name))
           (goto-char from)
           (insert (concat sep new-string sep)))
         (format "Inserted new section before '%s' at position %d in %s" section-name from buffer)))))
@@ -349,7 +360,12 @@ whitespace is added automatically around the inserted text."
              '(:name "new-string"
                      :type string
                      :description "The new text to insert."))
- :category "emacs-outline")
+ :category "emacs-outline"
+ :confirm #'eai-tool-library-outline--insert-before-confirm)
+
+(defun eai-tool-library-outline--insert-after-confirm (buffer _section-name _new-string)
+  "Return non-nil if outline-insert-after needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p buffer))
 
 (defun eai-tool-library-outline--insert-after (buffer section-name new-string)
   "Insert NEW-STRING after the outline section named SECTION-NAME in BUFFER.
@@ -367,6 +383,7 @@ whitespace is added automatically around the inserted text."
       (let ((to (plist-get match :to))
             (sep (eai-tool-library-outline--section-separator buf)))
         (with-current-buffer buf
+          (eai-tool-library-write-deny-check (buffer-file-name))
           (goto-char to)
           (insert (concat sep new-string sep)))
         (format "Inserted new section after '%s' at position %d in %s" section-name to buffer)))))
@@ -385,7 +402,8 @@ whitespace is added automatically around the inserted text."
              '(:name "new-string"
                      :type string
                      :description "The new text to insert."))
- :category "emacs-outline")
+ :category "emacs-outline"
+ :confirm #'eai-tool-library-outline--insert-after-confirm)
 
 (provide 'eai-tool-library-outline)
 
