@@ -206,7 +206,10 @@ nor imenu has useful data.  Returns a flat list of plists."
 
 Each plist has :name, :type, :from, and :to keys.  Uses tree-sitter
 when available, falls back to imenu, then to outline-regexp matching."
-  (let* ((buffer (get-buffer-create (or buffer (current-buffer))))
+  (let* ((buffer (or buffer (current-buffer)))
+         (buffer (if (stringp buffer)
+                     (eai-tool-library--get-buffer buffer)
+                   buffer))
          (result nil))
     ;; Try tree-sitter first
     (with-current-buffer buffer

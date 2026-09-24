@@ -26,6 +26,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'project)
 
 (defgroup eai-tool-library nil
   "eai-tool-library settings"
@@ -239,6 +240,60 @@ the module namespace."
     ;; llm tools don't have categories, so we'll still have to try
     ;; to remove them by name individually later on
     (eai-tool-library--remove-tool-by-keys-everywhere :category category)))
+
+;; generic helper functions
+
+(defun eai-tool-library--get-buffer (buffer-or-path &optional create-p)
+  "Get a buffer for BUFFER-OR-PATH, project-aware.
+
+If BUFFER-OR-PATH is an existing buffer, returns it.
+If BUFFER-OR-PATH is a string path, searches for a matching buffer by:
+1. Exact file path match
+2. Suffix match (BUFFER-OR-PATH is a trailing segment of the buffer's path)
+3. Basename match (filename component only)
+If no buffer exists, opens or creates the file resolved against the
+project root.
+
+If CREATE-P is non-nil and the file doesn't exist, creates it.
+
+Returns the buffer object."
+  (cond
+   ((bufferp buffer-or-path) buffer-or-path)
+   ((stringp buffer-or-path)
+    (let* ((project-root (when-let* ((pr (project-current)))
+                           (project-root pr)))
+           (resolved-path (if (file-name-absolute-p buffer-or-path)
+                              (expand-file-name buffer-or-path)
+                            (if project-root
+                                (expand-file-name buffer-or-path project-root)
+                              (expand-file-name buffer-or-path))))
+           ;; 1. Exact match
+           (buffer (get-file-buffer resolved-path))
+           ;; 2. Suffix match among live buffers (handles project-relative input)
+           (buffer (or buffer
+                       (catch 'found
+                         (dolist (buf (buffer-list))
+                           (when-let* ((bfn (buffer-file-name buf)))
+                             (when (or (string-suffix-p buffer-or-path bfn)
+                                       (string-suffix-p (concat "/" buffer-or-path) bfn))
+                               (throw 'found buf)))))))
+           ;; 3. Basename match
+           (buffer (or buffer
+                       (let ((basename (file-name-nondirectory buffer-or-path)))
+                         (catch 'found
+                           (dolist (buf (buffer-list))
+                             (when-let* ((bfn (buffer-file-name buf)))
+                               (when (string= basename (file-name-nondirectory bfn))
+                                 (throw 'found buf)))))))))
+      (or buffer
+          (if (file-exists-p resolved-path)
+              (find-file-noselect resolved-path)
+            (if create-p
+                (let ((buf (generate-new-buffer (file-name-nondirectory resolved-path))))
+                  (with-current-buffer buf
+                    (set-visited-file-name resolved-path))
+                  buf)
+              (error "File %s does not exist" resolved-path))))))))
 
 (provide 'eai-tool-library)
 
