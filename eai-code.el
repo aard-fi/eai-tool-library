@@ -423,7 +423,7 @@ first.  Must run before other hooks that may move point."
                 (buttonize "[Abort]"
                            (lambda (&rest _) (eai-code-abort)))
                 'mouse-face 'highlight
-                'help-echo "C-g")
+                'help-echo "C-c C-k")
                (or sub-btn ""))))
     (concat
      (propertize
@@ -1118,7 +1118,7 @@ Use `C-c C-c' in a chat buffer bound by `eai-code'."
 ;;;###autoload
 (defun eai-code-abort ()
   "Abort the current in-flight request in the chat buffer.
-Bound to C-g in eai-code chat buffers."
+Bound to C-c C-k in eai-code chat buffers."
   (interactive)
   (if eai-code--request-active
       (progn
@@ -1202,9 +1202,9 @@ Intended as a `before-save-hook' in eai-code chat buffers."
               (gptel-org--restore-state)))
         (error nil))
 
-      ;; Set up key bindings (no gptel-mode; we control the full send flow)
-      ;;(local-set-key (kbd "C-c C-c") #'eai-code-send)
-      ;;(local-set-key (kbd "C-g") #'eai-code-abort)
+      ;; Key bindings live in a minor mode map (no gptel-mode; we control the
+      ;; full send flow)
+      (eai-code-chat-mode 1)
 
       ;; Enable auto-compaction for this buffer
       (eai-code-compact-enable)
@@ -1226,6 +1226,18 @@ Intended as a `before-save-hook' in eai-code chat buffers."
       ;; Initial status header
       (eai-code--setup-header-line))
     (switch-to-buffer chat-buf)))
+
+(defvar-keymap eai-code-chat-mode-map
+  :doc "Keymap for `eai-code-chat-mode'."
+  "C-c C-c" #'eai-code-send
+  "C-c C-k" #'eai-code-abort)
+
+(define-minor-mode eai-code-chat-mode
+  "Minor mode for eai-code chat buffers.
+Its keymap is buffer-local, so the bindings don't leak into `org-mode-map' the
+way `local-set-key' in an org buffer does."
+  :lighter " eai"
+  :keymap eai-code-chat-mode-map)
 
 (defun eai-code (&optional arg)
   "Start a new code agent session.
