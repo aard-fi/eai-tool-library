@@ -49,7 +49,7 @@ the LLM behaves.")
  'eai-tool-library-os-tools-unsafe
  :function #'eai-tool-library-os--run-shell
  :name  "run-shell"
- :description "Executs a bash shell command and returns its output. After calling this tool, stop. Then continue fulfilling user's request."
+ :description "Execute a bash shell command. Only use this when no dedicated tool exists for the task. For file operations, project exploration, code search, or buffer editing, use the specific tools instead. After calling this tool, stop. Then continue fulfilling user's request."
  :args (list '(:name "command"
                      :type string
                      :description "The shell command to execute."))
@@ -72,6 +72,26 @@ the LLM behaves.")
  :args (list '(:name "filename"
                      :type string
                      :description "The filename to read."))
+ :category "OS")
+
+(defun eai-tool-library-os--list-directory (path)
+  "Return a list of files and directories in PATH.
+Returns each entry as an absolute path."
+  (eai-tool-library--debug-log (format "list-directory %s" path))
+  (let ((expanded (expand-file-name path)))
+    (unless (file-directory-p expanded)
+      (error "Not a directory: %s" expanded))
+    (seq-remove (lambda (f) (member (file-name-nondirectory f) '("." "..")))
+                (directory-files expanded t))))
+
+(eai-tool-library-make-tools-and-register
+ 'eai-tool-library-os-tools
+ :function #'eai-tool-library-os--list-directory
+ :name  "list-directory"
+ :description "Returns the files and directories contained in a directory. Use this instead of shell commands like 'ls' or 'find'."
+ :args (list '(:name "path"
+                     :type string
+                     :description "The directory path to list."))
  :category "OS")
 
 (defun eai-tool-library-os--get-default-directory (&optional buffer-name)
