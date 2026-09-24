@@ -27,6 +27,9 @@
 
 (require 'project)
 (require 'subr-x)
+(eval-when-compile
+  (require 'eai-code-gptel-stub)
+  (eai-code-gptel-stub--vars))
 
 (defvar eai-doctor--ok      (propertize "✔" 'face 'success))
 (defvar eai-doctor--fail    (propertize "✘" 'face 'error))
