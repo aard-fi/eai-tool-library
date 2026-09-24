@@ -154,13 +154,13 @@ Returns nil if FILE is not tracked or has no committed version."
 
 (defun eai-code-reload--uncommitted-el-files ()
   "Return a list of Elisp files with uncommitted changes in the current project.
-Uses `git diff --name-only' and filters for .el files."
+Uses `git diff HEAD --name-only' and filters for .el files."
   (let ((default-directory (or (when-let* ((proj (project-current)))
                                  (project-root proj))
                                default-directory))
         files)
     (with-temp-buffer
-      (when (zerop (call-process "git" nil t nil "diff" "--name-only" "--diff-filter=AM"))
+      (when (zerop (call-process "git" nil t nil "diff" "HEAD" "--name-only" "--diff-filter=AM"))
         (goto-char (point-min))
         (while (not (eobp))
           (let ((line (string-trim (thing-at-point 'line t))))
@@ -182,16 +182,17 @@ Reads forms from FILE until it finds a `(provide \='NAME)' form."
     (with-temp-buffer
       (insert-file-contents file)
       (goto-char (point-min))
-      (condition-case nil
-          (while (not (eobp))
-            (let ((form (read (current-buffer))))
-              (when (and (listp form)
-                         (eq (car form) 'provide)
-                         (> (length form) 1)
-                         (symbolp (cadr form)))
-                (cl-return (cadr form)))))
-        ((end-of-file scan-error)
-         nil)))))
+      (catch 'found
+        (condition-case nil
+            (while t
+              (let ((form (read (current-buffer))))
+                ;; (provide 'NAME) reads as (provide (quote NAME))
+                (when (and (eq (car-safe form) 'provide)
+                           (eq (car-safe (cadr form)) 'quote)
+                           (symbolp (cadr (cadr form))))
+                  (throw 'found (cadr (cadr form))))))
+          ((end-of-file scan-error)
+           nil))))))
 
 (defun eai-code-reload--unbind (name type)
   "Remove the binding for NAME based on TYPE.
