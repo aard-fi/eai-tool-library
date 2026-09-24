@@ -926,6 +926,9 @@ RESPONSE-PREFIX is the prefix to insert before the response text."
                        eai-code--tool-turn-count
                        (mapconcat #'eai-code--tool-call-description
                                   calls "; "))
+              ;; gptel only reports calls needing confirmation here; they
+              ;; don't run until accepted, so hand them to gptel's prompt.
+              (run-at-time 0 nil #'gptel--display-tool-calls calls info t)
               ;; Replace old filler with current tool-call status
               (eai-code--remove-filler)
               (eai-code--insert-filler
@@ -1093,12 +1096,13 @@ Use `C-c C-c' in a chat buffer bound by `eai-code'."
     (message "Sending...")
     (condition-case err
         (let ((stream (and (boundp 'gptel-stream) gptel-stream)))
-          (gptel-request conversation
-            :system (eai-code--directive)
-            :stream stream
-            :callback (lambda (response info)
-                        (with-current-buffer buf
-                          (eai-code--handle-callback response response-prefix stream info)))))
+          (setq-local gptel--fsm-last
+                      (gptel-request conversation
+                        :system (eai-code--directive)
+                        :stream stream
+                        :callback (lambda (response info)
+                                    (with-current-buffer buf
+                                      (eai-code--handle-callback response response-prefix stream info))))))
       (error
        (eai-code--debug-log "send ERROR: %S" err)
        (setq eai-code--request-active nil
