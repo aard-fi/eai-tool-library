@@ -28,6 +28,7 @@
 
 (require 'eai-tool-library)
 (require 'project)
+(require 'xref)
 
 (defvar eai-tool-library-project-tools '()
   "The list of emacs related tools")
