@@ -270,5 +270,111 @@ The buffer is killed after BODY completes."
     (with-current-buffer "*etl-test-insert-mid*"
       (should (string= "hello world" (buffer-string))))))
 
+;;; eai-tool-library-buffer--read-lines / --replace-text
+
+(defconst etl-buf--elisp-sample
+  "(defun foo (x)\n  (+ x 1))\n\n(defun bar (y)\n  (foo y))\n\n(defun baz ()\n  (foo 2))\n"
+  "Elisp sample for the read-lines and replace-text tests.")
+
+(defmacro etl-buf--with-temp-file (var content &rest body)
+  "Evaluate BODY with VAR bound to a temporary .el file holding CONTENT.
+The file and any buffer visiting it are removed afterwards."
+  (declare (indent 2))
+  `(let ((,var (make-temp-file "etl-buf-" nil ".el" ,content)))
+     (unwind-protect
+         (progn ,@body)
+       (when-let* ((buf (find-buffer-visiting ,var)))
+         (with-current-buffer buf (set-buffer-modified-p nil))
+         (kill-buffer buf))
+       (delete-file ,var))))
+
+(defun etl-buf--file-string (file)
+  "Return the contents of FILE on disk."
+  (with-temp-buffer
+    (insert-file-contents file)
+    (buffer-string)))
+
+(ert-deftest etl-buffer/read-lines/numbered-range ()
+  "Returns the requested lines, numbered."
+  (etl-buf--with-temp-file file etl-buf--elisp-sample
+    (should (string= (eai-tool-library-buffer--read-lines file 1 2)
+                     "     1\t(defun foo (x)\n     2\t  (+ x 1))\n"))))
+
+(ert-deftest etl-buffer/read-lines/cut-at-limit ()
+  "Long output is cut at a line boundary with a note where to continue."
+  (etl-buf--with-temp-file file etl-buf--elisp-sample
+    (let* ((eai-tool-library-max-result-size 40)
+           (result (eai-tool-library-buffer--read-lines file)))
+      (should (string-match-p "\\`     1\t(defun foo (x)\n" result))
+      (should (string-match-p "\\[truncated; continue from line 3 of 8\\]"
+                              result)))))
+
+(ert-deftest etl-buffer/read-lines/includes-unsaved-edits ()
+  "Reads the visiting buffer, so unsaved edits are included."
+  (etl-buf--with-temp-file file etl-buf--elisp-sample
+    (with-current-buffer (find-file-noselect file)
+      (goto-char (point-min))
+      (insert ";; unsaved\n"))
+    (should (string-match-p ";; unsaved"
+                            (eai-tool-library-buffer--read-lines file 1 1)))))
+
+(ert-deftest etl-buffer/replace-text/reindents-and-saves ()
+  "A unique match is replaced, re-indented in Lisp buffers, and saved."
+  (etl-buf--with-temp-file file etl-buf--elisp-sample
+    (should (string-match-p
+             "Replaced 1 occurrence .*, saved"
+             (eai-tool-library-buffer--replace-text file "(+ x 1))"
+                                                    "(+ x\n2))")))
+    (should (string-prefix-p "(defun foo (x)\n  (+ x\n     2))\n"
+                             (etl-buf--file-string file)))))
+
+(ert-deftest etl-buffer/replace-text/not-found-errors ()
+  "Text that does not occur is an error."
+  (etl-buf--with-temp-file file etl-buf--elisp-sample
+    (should-error (eai-tool-library-buffer--replace-text file "(nope)" "x"))))
+
+(ert-deftest etl-buffer/replace-text/case-sensitive ()
+  "Matching ignores `case-fold-search'."
+  (etl-buf--with-temp-file file etl-buf--elisp-sample
+    (let ((case-fold-search t))
+      (should-error (eai-tool-library-buffer--replace-text file "(DEFUN FOO"
+                                                           "x")))))
+
+(ert-deftest etl-buffer/replace-text/ambiguous-errors ()
+  "Several matches without ALL are an error, and nothing changes."
+  (etl-buf--with-temp-file file etl-buf--elisp-sample
+    (should-error (eai-tool-library-buffer--replace-text file "(foo " "(qux "))
+    (should-error (eai-tool-library-buffer--replace-text
+                   file "(foo " "(qux " :json-false))
+    (should (string= (etl-buf--file-string file) etl-buf--elisp-sample))))
+
+(ert-deftest etl-buffer/replace-text/all-replaces-every-match ()
+  "With ALL, every occurrence is replaced."
+  (etl-buf--with-temp-file file etl-buf--elisp-sample
+    (should (string-match-p
+             "Replaced 2 occurrences"
+             (eai-tool-library-buffer--replace-text file "(foo " "(qux " t)))
+    (should-not (string-match-p "(foo " (etl-buf--file-string file)))))
+
+(ert-deftest etl-buffer/replace-text/unbalancing-edit-rolls-back ()
+  "An edit that unbalances parens in a Lisp buffer is rolled back."
+  (etl-buf--with-temp-file file etl-buf--elisp-sample
+    (should-error (eai-tool-library-buffer--replace-text
+                   file "(defun baz ()" "(defun baz (("))
+    (with-current-buffer (find-buffer-visiting file)
+      (should (string= (buffer-string) etl-buf--elisp-sample))
+      (should-not (buffer-modified-p)))))
+
+(ert-deftest etl-buffer/replace-text/keeps-unsaved-buffer-unsaved ()
+  "A buffer with unsaved edits is edited but not saved."
+  (etl-buf--with-temp-file file etl-buf--elisp-sample
+    (with-current-buffer (find-file-noselect file)
+      (goto-char (point-max))
+      (insert ";; unsaved\n"))
+    (should (string-match-p
+             "not saved"
+             (eai-tool-library-buffer--replace-text file "(defun bar"
+                                                    "(defun bar2")))
+    (should (string= (etl-buf--file-string file) etl-buf--elisp-sample))))
 (provide 'test-buffer)
 ;;; test-buffer.el ends here

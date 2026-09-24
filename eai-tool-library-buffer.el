@@ -292,6 +292,165 @@ If there is no window in that direction, return nil."
                      :description "The text to insert with."))
  :category "emacs-buffer")
 
+(defun eai-tool-library-buffer--number (value)
+  "Return VALUE as a number; LLMs sometimes send numbers as strings."
+  (if (stringp value) (string-to-number value) value))
+
+(defun eai-tool-library-buffer--true-p (value)
+  "Return non-nil if VALUE is true; JSON false arrives as `:json-false'."
+  (and value (not (eq value :json-false))))
+
+(defun eai-tool-library-buffer--refresh ()
+  "Revert the current buffer if its file changed and it has no unsaved edits."
+  (when (and buffer-file-name
+             (not (buffer-modified-p))
+             (not (verify-visited-file-modtime)))
+    (revert-buffer t t t)))
+
+(defun eai-tool-library-buffer--numbered-lines (start end)
+  "Return lines START to END of the current buffer, numbered like cat -n.
+Output is cut at a line boundary before it exceeds
+`eai-tool-library-max-result-size', with a note on where to continue."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (let* ((total (count-lines (point-min) (point-max)))
+             (end (min total end))
+             (line start)
+             (size 0)
+             lines)
+        (goto-char (point-min))
+        (forward-line (1- start))
+        (catch 'full
+          (while (<= line end)
+            (let ((text (format "%6d\t%s\n" line
+                                (buffer-substring-no-properties
+                                 (line-beginning-position)
+                                 (line-end-position)))))
+              (when (> (+ size (length text)) eai-tool-library-max-result-size)
+                (push (format "[truncated; continue from line %d of %d]\n"
+                              line total)
+                      lines)
+                (throw 'full nil))
+              (push text lines)
+              (setq size (+ size (length text))
+                    line (1+ line))
+              (forward-line 1))))
+        (apply #'concat (nreverse lines))))))
+
+(defun eai-tool-library-buffer--read-lines (buffer &optional start end)
+  "Return lines START to END of BUFFER, numbered like cat -n.
+BUFFER may be a buffer name or a file path.  START defaults to 1, END
+to the last line."
+  (eai-tool-library--debug-log (format "read-lines %s %s->%s" buffer start end))
+  (with-current-buffer (eai-tool-library--get-buffer buffer)
+    (eai-tool-library-buffer--refresh)
+    (eai-tool-library-buffer--numbered-lines
+     (max 1 (or (eai-tool-library-buffer--number start) 1))
+     (or (eai-tool-library-buffer--number end) most-positive-fixnum))))
+
+(eai-tool-library-make-tools-and-register
+ 'eai-tool-library-buffer-tools
+ :function #'eai-tool-library-buffer--read-lines
+ :name "read-lines"
+ :description "Read lines of a file or buffer, numbered like `cat -n'. Reads the buffer when the file is open, so unsaved edits are included. Long output is cut at a line boundary with a note where to continue. The buffer may be a buffer name or a file path; files are opened if needed."
+ :args (list '(:name "buffer"
+                     :type string
+                     :description "Buffer name or file path.")
+             '(:name "start"
+                     :type integer
+                     :optional t
+                     :description "First line to read, 1-based. Defaults to 1.")
+             '(:name "end"
+                     :type integer
+                     :optional t
+                     :description "Last line to read. Defaults to the last line."))
+ :category "emacs-buffer")
+
+(defun eai-tool-library-buffer--replace-text (buffer old new &optional all)
+  "Replace the exact text OLD with NEW in BUFFER.
+OLD must occur exactly once, unless ALL is true, in which case every
+occurrence is replaced.  The edit is one change group: in Lisp buffers
+the new text is re-indented, and if the buffer had balanced parens
+before but not after, the edit is rolled back.  A file buffer without
+unsaved changes before the edit is saved.  Returns the edited lines
+with some context."
+  (eai-tool-library--debug-log (format "replace-text %s" buffer))
+  (when (string-empty-p old)
+    (error "OLD must not be empty"))
+  (with-current-buffer (eai-tool-library--get-buffer buffer)
+    (eai-tool-library-buffer--refresh)
+    (save-excursion
+      (save-restriction
+        (widen)
+        (let ((case-fold-search nil)
+              (all (eai-tool-library-buffer--true-p all))
+              (lisp (derived-mode-p 'lisp-data-mode))
+              (was-modified (buffer-modified-p))
+              (count 0)
+              regions)
+          (goto-char (point-min))
+          (while (search-forward old nil t)
+            (setq count (1+ count)))
+          (cond
+           ((= count 0)
+            (error "Text not found in %s" (buffer-name)))
+           ((and (> count 1) (not all))
+            (error "Text occurs %d times in %s; include more context to make it unique, or set all"
+                   count (buffer-name))))
+          (let ((balanced (or (not lisp) (ignore-errors (check-parens) t)))
+                (group (prepare-change-group)))
+            (activate-change-group group)
+            (condition-case err
+                (progn
+                  (goto-char (point-min))
+                  (while (search-forward old nil t)
+                    (replace-match new t t)
+                    (push (cons (copy-marker (- (point) (length new)))
+                                (point-marker))
+                          regions))
+                  (when lisp
+                    (dolist (region regions)
+                      (indent-region (car region) (cdr region)))
+                    (when balanced
+                      (check-parens)))
+                  (accept-change-group group))
+              (error
+               (cancel-change-group group)
+               (error "Edit rolled back: %s" (error-message-string err)))))
+          (let* ((regions (nreverse regions))
+                 (first (line-number-at-pos (car (car regions))))
+                 (last (line-number-at-pos (cdr (car (last regions)))))
+                 (saved (and buffer-file-name (not was-modified)
+                             (progn (save-buffer) t))))
+            (format "Replaced %d occurrence%s in %s%s\n%s"
+                    count (if (= count 1) "" "s")
+                    (or buffer-file-name (buffer-name))
+                    (if saved ", saved"
+                      " (not saved: buffer had unsaved changes)")
+                    (eai-tool-library-buffer--numbered-lines
+                     (max 1 (- first 2)) (+ last 2)))))))))
+
+(eai-tool-library-make-tools-and-register
+ 'eai-tool-library-buffer-tools-maybe-safe
+ :function #'eai-tool-library-buffer--replace-text
+ :name "replace-text"
+ :description "Replace an exact piece of text in a file or buffer. Prefer this over shell tools like sed. OLD must match exactly, including whitespace and indentation, and occur exactly once unless all is true; include enough surrounding lines to make it unique. In Lisp buffers the new text is re-indented and an edit that unbalances parens is rolled back. A file without unsaved changes is saved afterwards. Returns the edited lines with context. The buffer may be a buffer name or a file path; files are opened if needed."
+ :args (list '(:name "buffer"
+                     :type string
+                     :description "Buffer name or file path.")
+             '(:name "old"
+                     :type string
+                     :description "The exact text to replace.")
+             '(:name "new"
+                     :type string
+                     :description "The replacement text.")
+             '(:name "all"
+                     :type boolean
+                     :optional t
+                     :description "Replace every occurrence instead of requiring exactly one."))
+ :category "emacs-buffer")
+
 ;; the following tools directly make existing functions available
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-buffer-tools
