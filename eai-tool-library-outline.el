@@ -17,6 +17,9 @@
 
 (require 'eai-tool-library)
 
+(defvar eai-code-edit-style nil
+  "Forward declaration; defined in eai-code.el.")
+
 (require 'imenu)
 (require 'treesit)
 
@@ -241,9 +244,12 @@ when available, falls back to imenu, then to outline-regexp matching."
 (defun eai-tool-library-outline--replace-section (buffer section-name new-string)
   "Replace the outline section named SECTION-NAME in BUFFER with NEW-STRING.
 
-Uses `eai-tool-library-outline-' to locate the section by exact name
-match, then replaces the region (:from to :to) with NEW-STRING.
-Returns a message indicating success or failure."
+When `eai-code-edit-style' is `review', inserts smerge-style
+conflict markers instead of replacing directly.
+
+Uses `eai-tool-library-outline--get' to locate the section by exact
+name match, then replaces the region (:from to :to) with
+NEW-STRING.  Returns a message indicating success or failure."
   (let* ((buf (get-buffer-create (or buffer (current-buffer))))
          (outline (eai-tool-library-outline--get buf))
          (match (seq-find (lambda (entry)
@@ -255,10 +261,23 @@ Returns a message indicating success or failure."
             (to (plist-get match :to)))
         (with-current-buffer buf
           (eai-tool-library-write-deny-check (buffer-file-name))
-          (delete-region from to)
-          (goto-char from)
-          (insert new-string))
-        (format "Replaced section '%s' (%d-%d) in %s" section-name from to buffer)))))
+          (if (eq eai-code-edit-style 'review)
+              (let ((old-text (buffer-substring-no-properties from to)))
+                (goto-char from)
+                (delete-region from to)
+                (insert (concat "<<<<<<< SECTION BEFORE REPLACE\n"
+                                old-text
+                                "=======\n"
+                                new-string
+                                "\n>>>>>>> SECTION AFTER REPLACE\n"))
+                (smerge-mode 1)
+                (format "Inserted review markers for section '%s' (%d-%d) in %s"
+                        section-name from to buffer))
+            (delete-region from to)
+            (goto-char from)
+            (insert new-string)
+            (format "Replaced section '%s' (%d-%d) in %s"
+                    section-name from to buffer)))))))
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-outline-tools-maybe-safe
@@ -328,9 +347,13 @@ the section is not found."
 (defun eai-tool-library-outline--insert-before (buffer section-name new-string)
   "Insert NEW-STRING before the outline section named SECTION-NAME in BUFFER.
 
-Uses `eai-tool-library-outline-' to locate the section by exact name match,
-then inserts the new text before the section's :from position.  Mode-appropriate
-whitespace is added automatically around the inserted text."
+When `eai-code-edit-style' is `review', wraps the inserted text in
+smerge-style markers instead of inserting directly.
+
+Uses `eai-tool-library-outline--get' to locate the section by exact
+name match, then inserts the new text before the section's :from
+position.  Mode-appropriate whitespace is added automatically
+around the inserted text."
   (let* ((buf (get-buffer-create (or buffer (current-buffer))))
          (outline (eai-tool-library-outline--get buf))
          (match (seq-find (lambda (entry)
@@ -343,8 +366,19 @@ whitespace is added automatically around the inserted text."
         (with-current-buffer buf
           (eai-tool-library-write-deny-check (buffer-file-name))
           (goto-char from)
-          (insert (concat sep new-string sep)))
-        (format "Inserted new section before '%s' at position %d in %s" section-name from buffer)))))
+          (if (eq eai-code-edit-style 'review)
+              (progn
+                (insert (concat "<<<<<<< INSERTED BEFORE '"
+                                section-name "'\n"
+                                new-string
+                                "\n=======\n"
+                                ">>>>>>> END INSERT\n"))
+                (smerge-mode 1)
+                (format "Inserted review markers before '%s' at %d in %s"
+                        section-name from buffer))
+            (insert (concat sep new-string sep))
+            (format "Inserted new section before '%s' at position %d in %s"
+                    section-name from buffer)))))))
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-outline-tools-maybe-safe
@@ -370,9 +404,13 @@ whitespace is added automatically around the inserted text."
 (defun eai-tool-library-outline--insert-after (buffer section-name new-string)
   "Insert NEW-STRING after the outline section named SECTION-NAME in BUFFER.
 
-Uses `eai-tool-library-outline-' to locate the section by exact name match,
-then inserts the new text after the section's :to position.  Mode-appropriate
-whitespace is added automatically around the inserted text."
+When `eai-code-edit-style' is `review', wraps the inserted text in
+smerge-style markers instead of inserting directly.
+
+Uses `eai-tool-library-outline--get' to locate the section by exact
+name match, then inserts the new text after the section's :to
+position.  Mode-appropriate whitespace is added automatically
+around the inserted text."
   (let* ((buf (get-buffer-create (or buffer (current-buffer))))
          (outline (eai-tool-library-outline--get buf))
          (match (seq-find (lambda (entry)
@@ -385,8 +423,19 @@ whitespace is added automatically around the inserted text."
         (with-current-buffer buf
           (eai-tool-library-write-deny-check (buffer-file-name))
           (goto-char to)
-          (insert (concat sep new-string sep)))
-        (format "Inserted new section after '%s' at position %d in %s" section-name to buffer)))))
+          (if (eq eai-code-edit-style 'review)
+              (progn
+                (insert (concat "<<<<<<< INSERTED AFTER '"
+                                section-name "'\n"
+                                new-string
+                                "\n=======\n"
+                                ">>>>>>> END INSERT\n"))
+                (smerge-mode 1)
+                (format "Inserted review markers after '%s' at %d in %s"
+                        section-name to buffer))
+            (insert (concat sep new-string sep))
+            (format "Inserted new section after '%s' at position %d in %s"
+                    section-name to buffer)))))))
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-outline-tools-maybe-safe

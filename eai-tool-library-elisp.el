@@ -29,6 +29,9 @@
 
 (require 'eai-tool-library)
 
+(defvar eai-code-edit-style nil
+  "Forward declaration; defined in eai-code.el.")
+
 (defvar eai-tool-library-elisp-tools '()
   "The list of elisp related tools")
 
@@ -88,64 +91,62 @@ the defun."
                      :description "The buffer to search in"))
  :category "elisp")
 
+(defun eai-tool-library-elisp--replace-defun-region-confirm (_function-name _new-string &optional buffer)
+  "Return non-nil if replace-defun-region needs confirmation for BUFFER."
+  (eai-tool-library--buffer-modify-confirm-p (or buffer (current-buffer))))
+
 (defun eai-tool-library-elisp--replace-defun-region (function-name new-string &optional buffer)
   "Replace the entire FUNCTION-NAME region with NEW-STRING.
 
+When `eai-code-edit-style' is `review', inserts smerge conflict
+markers instead of applying the change directly.  This lets the
+user review before accepting.
+
 Use BUFFER or current buffer if BUFFER is nil."
-  (let ((bounds (eai-tool-library-elisp--defun-region function-name buffer)))
-    (if bounds
-        (with-current-buffer (or buffer (current-buffer))
-          (save-excursion
-            (goto-char (car bounds))
-            (delete-region (car bounds) (cdr bounds))
-            (insert new-string)))
-      (message "Function `%s` not found for replacement" function-name))))
-
-(defun eai-tool-library-elisp--smerge-replace-defun-region-confirm (_function-name _new-string &optional buffer)
-  "Return non-nil if smerge-replace-defun-region needs confirmation for BUFFER."
-  (eai-tool-library--buffer-modify-confirm-p (or buffer (current-buffer))))
-
-(defun eai-tool-library-elisp--smerge-replace-defun-region (function-name new-string &optional buffer)
-  "Insert smerge conflict markers for FUNCTION-NAME region with NEW-STRING.
-
-Operate in BUFFER or current buffer if BUFFER is nil."
-  (interactive "sFunction name: \nsNew function text: \nBBuffer (optional): ")
   (let ((buf (or buffer (current-buffer)))
-        bounds old-text conflict-text)
+        bounds old-text)
     (setq bounds (eai-tool-library-elisp--defun-region function-name buf))
     (if (not bounds)
         (message "Function `%s` not found in buffer %s" function-name (buffer-name buf))
       (with-current-buffer buf
         (eai-tool-library-write-deny-check (buffer-file-name))
         (setq old-text (buffer-substring-no-properties (car bounds) (cdr bounds)))
-        (setq conflict-text
-              (concat "<<<<<<< FUNCTION BEFORE REPLACE\n"
-                      old-text
-                      "=======\n"
-                      new-string
-                      "\n>>>>>>> FUNCTION AFTER REPLACE\n"))
-        (goto-char (car bounds))
-        (delete-region (car bounds) (cdr bounds))
-        (insert conflict-text)
-        (smerge-mode 1)
-        (message "Inserted smerge-style conflict for function `%s`" function-name)))))
+        (if (eq eai-code-edit-style 'review)
+            ;; Review mode: smerge conflict markers
+            (let ((conflict-text
+                   (concat "<<<<<<< FUNCTION BEFORE REPLACE\n"
+                           old-text
+                           "=======\n"
+                           new-string
+                           "\n>>>>>>> FUNCTION AFTER REPLACE\n")))
+              (goto-char (car bounds))
+              (delete-region (car bounds) (cdr bounds))
+              (insert conflict-text)
+              (smerge-mode 1)
+              (message "Inserted smerge-style conflict for function `%s`" function-name))
+          ;; Direct mode: simple replacement
+          (save-excursion
+            (goto-char (car bounds))
+            (delete-region (car bounds) (cdr bounds))
+            (insert new-string))
+          (message "Replaced function `%s`" function-name))))))
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-elisp-tools-maybe-safe
- :function #'eai-tool-library-elisp--smerge-replace-defun-region
- :name  "smerge-replace-defun-region"
- :description "Search for a function name, and replace the complete defun with a diff block. After calling this tool, stop. Then continue fulfilling user's request."
+ :function #'eai-tool-library-elisp--replace-defun-region
+ :name  "replace-defun-region"
+ :description "Replace a complete function definition with new text. Finds the function by name, deletes its defun region, and inserts the new definition. After calling this tool, stop. Then continue fulfilling user's request."
  :args (list '(:name "function-name"
                      :type string
-                     :description "The elisp code to evaluate.")
+                     :description "The name of the function to replace.")
              '(:name "new-string"
                      :type string
-                     :description "The new function definition")
+                     :description "The complete new function definition (including defun line).")
              '(:name "buffer"
                      :type string
-                     :description "The buffer to perform the replacement"))
+                     :description "The buffer to perform the replacement."))
  :category "elisp"
- :confirm #'eai-tool-library-elisp--smerge-replace-defun-region-confirm)
+ :confirm #'eai-tool-library-elisp--replace-defun-region-confirm)
 
 (defun eai-tool-library-elisp-variable-doc (name)
   "Try to return documentation for variable NAME"

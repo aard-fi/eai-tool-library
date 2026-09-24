@@ -329,6 +329,13 @@ grant itself write access."
   (string-prefix-p (file-name-as-directory (file-truename dir)) file
                    (file-name-case-insensitive-p file)))
 
+(defvar eai-tool-library-write-protected-files
+  '(".eai-code-confirm")
+  "Basenames that tools are never allowed to write.
+This is checked before `eai-tool-library-write-policy'.
+Protects files like `.eai-code-confirm' that store tool
+permissions, preventing an agent from self-elevating.")
+
 (defun eai-tool-library-write-action (file)
   "Return the write action for FILE: `allow', `ask' or `deny'.
 FILE nil stands for a buffer without a file, which is always `ask'.
@@ -338,12 +345,18 @@ the buffer their request came from.  See `eai-tool-library-write-policy'."
       'ask
     (let ((file (file-truename file))
           best)
-      (dolist (entry eai-tool-library-write-policy)
-        (when (and (eai-tool-library--path-in-directory-p file (car entry))
-                   (or (not best)
-                       (> (length (file-truename (car entry)))
-                          (length (file-truename (car best))))))
-          (setq best entry)))
+      ;; Always deny writes to protected files (e.g. .eai-code-confirm)
+      (when (member (file-name-nondirectory file)
+                      eai-tool-library-write-protected-files)
+        (setq best (cons nil 'deny)))
+      ;; Normal policy resolution
+      (unless best
+        (dolist (entry eai-tool-library-write-policy)
+          (when (and (eai-tool-library--path-in-directory-p file (car entry))
+                     (or (not best)
+                         (> (length (file-truename (car entry)))
+                            (length (file-truename (car best))))))
+            (setq best entry))))
       (cond
        (best (cdr best))
        ((when-let* ((project (project-current)))

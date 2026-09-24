@@ -36,6 +36,9 @@
 (require 'eai-tool-library)
 (require 'eai-tool-library-outline)
 
+(defvar eai-code-edit-style nil
+  "Forward declaration; defined in eai-code.el.")
+
 (require 'org)
 
 (defvar eai-tool-library-org-tools '()
@@ -305,6 +308,9 @@ Returns the subtree contents as a string."
 (defun eai-tool-library-org--replace-subtree (buffer heading-name new-string &optional index)
   "Replace the subtree at HEADING-NAME in BUFFER with NEW-STRING.
 
+When `eai-code-edit-style' is `review', inserts smerge-style
+conflict markers instead of replacing directly.
+
 Optional INDEX (0-based) disambiguates when multiple headings match.
 Uses org's own subtree boundary detection for accurate replacement
 of nested subtrees.  The heading line itself is preserved; only
@@ -325,16 +331,40 @@ the heading is replaced."
             ;; If new-string starts with a heading, replace the whole subtree
             ;; including the heading line.  Otherwise preserve the heading.
             (if (string-match-p "^\\*+ " new-string)
-                (progn
+                (if (eq eai-code-edit-style 'review)
+                    (let ((old-text (buffer-substring-no-properties from to)))
+                      (goto-char from)
+                      (delete-region from to)
+                      (insert (concat "<<<<<<< SUBTREE BEFORE REPLACE\n"
+                                      old-text
+                                      "=======\n"
+                                      new-string
+                                      "\n>>>>>>> SUBTREE AFTER REPLACE\n"))
+                      (smerge-mode 1)
+                      (format "Inserted review markers for subtree '%s' in %s"
+                              heading-name buffer))
                   (delete-region from to)
                   (goto-char from)
-                  (insert new-string))
+                  (insert new-string)
+                  (format "Replaced subtree '%s' in %s" heading-name buffer))
               (forward-line 1)
               (let ((body-from (point)))
-                (delete-region body-from to)
-                (goto-char body-from)
-                (insert new-string)))
-            (format "Replaced subtree '%s' in %s" heading-name buffer)))))))
+                (if (eq eai-code-edit-style 'review)
+                    (let ((old-body (buffer-substring-no-properties body-from to)))
+                      (goto-char body-from)
+                      (delete-region body-from to)
+                      (insert (concat "<<<<<<< SUBTREE BODY BEFORE REPLACE\n"
+                                      old-body
+                                      "=======\n"
+                                      new-string
+                                      "\n>>>>>>> SUBTREE BODY AFTER REPLACE\n"))
+                      (smerge-mode 1)
+                      (format "Inserted review markers for subtree body '%s' in %s"
+                              heading-name buffer))
+                  (delete-region body-from to)
+                  (goto-char body-from)
+                  (insert new-string)
+                  (format "Replaced subtree '%s' in %s" heading-name buffer))))))))))
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-org-tools-maybe-safe

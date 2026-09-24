@@ -30,6 +30,7 @@
 (require 'eai-code-monitor)
 (require 'eai-code-error)
 (require 'eai-code-compact)
+(require 'eai-code-confirm)
 (require 'eai-code-agent)
 (eval-when-compile
   (require 'eai-code-gptel-stub)
@@ -127,6 +128,15 @@ A blank canvas so far.
 (defcustom eai-code-debug nil
   "When non-nil, log debug info to *eai-code debug* buffer."
   :type 'boolean
+  :group 'eai-code)
+
+(defcustom eai-code-edit-style 'direct
+  "How edits by the agent are applied.
+`direct' – replace text immediately.
+`review'  – insert smerge-style conflict markers so you can
+            review before accepting."
+  :type '(choice (const :tag "Apply immediately" direct)
+                 (const :tag "Review via smerge" review))
   :group 'eai-code)
 
 (defface eai-code-user-prompt
@@ -929,8 +939,8 @@ RESPONSE-PREFIX is the prefix to insert before the response text."
                        (mapconcat #'eai-code--tool-call-description
                                   calls "; "))
               ;; gptel only reports calls needing confirmation here; they
-              ;; don't run until accepted, so hand them to gptel's prompt.
-              (run-at-time 0 nil #'gptel--display-tool-calls calls info t)
+              ;; don't run until accepted, so hand them to eai-code-confirm.
+              (run-at-time 0 nil #'eai-code-confirm-display calls info)
               ;; Replace old filler with current tool-call status
               (eai-code--remove-filler)
               (eai-code--insert-filler
@@ -1256,6 +1266,7 @@ the current directory, if it is a project, or prompt."
     (eai-code-metrics-enable)
     (eai-code-monitor-enable)
     (eai-code-error-enable)
+    (eai-code-confirm-enable)
     (eai-code-agent-enable)))
 
 (provide 'eai-code)

@@ -26,6 +26,9 @@
 
 (require 'eai-tool-library)
 
+(defvar eai-code-edit-style nil
+  "Forward declaration; defined in eai-code.el.")
+
 (defvar eai-tool-library-buffer-tools '()
   "The list of buffer related tools")
 
@@ -225,13 +228,26 @@ If there is no window in that direction, return nil."
   (eai-tool-library--buffer-modify-confirm-p buffer))
 
 (defun eai-tool-library-buffer--replace-region (buffer from to text)
-  "Replace text in BUFFER from FROM to TO with TEXT"
+  "Replace text in BUFFER from FROM to TO with TEXT.
+
+When `eai-code-edit-style' is `review', inserts smerge-style
+conflict markers instead of replacing directly."
   (eai-tool-library--debug-log (format "replace-region %s->%s in %s with %s" from to buffer text))
   (with-current-buffer (eai-tool-library--get-buffer buffer)
     (eai-tool-library-write-deny-check (buffer-file-name))
-    (delete-region from to)
-    (goto-char from)
-    (insert text)))
+    (if (eq eai-code-edit-style 'review)
+        (let ((old-text (buffer-substring-no-properties from to)))
+          (goto-char from)
+          (delete-region from to)
+          (insert (concat "<<<<<<< REGION BEFORE REPLACE\n"
+                          old-text
+                          "=======\n"
+                          text
+                          "\n>>>>>>> REGION AFTER REPLACE\n"))
+          (smerge-mode 1))
+      (delete-region from to)
+      (goto-char from)
+      (insert text))))
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-buffer-tools-maybe-safe
@@ -258,11 +274,23 @@ If there is no window in that direction, return nil."
   (eai-tool-library--buffer-modify-confirm-p buffer))
 
 (defun eai-tool-library-buffer--remove-region (buffer from to)
-  "Remove region from FROM to TO in buffer BUFFER"
+  "Remove region from FROM to TO in buffer BUFFER.
+
+When `eai-code-edit-style' is `review', wraps the removed text in
+smerge-style markers so the deletion can be reviewed."
   (eai-tool-library--debug-log (format "remove-region %s->%s from %s" from to buffer))
   (with-current-buffer (eai-tool-library--get-buffer buffer)
     (eai-tool-library-write-deny-check (buffer-file-name))
-    (delete-region from to)))
+    (if (eq eai-code-edit-style 'review)
+        (let ((old-text (buffer-substring-no-properties from to)))
+          (goto-char from)
+          (delete-region from to)
+          (insert (concat "<<<<<<< REMOVED REGION\n"
+                          old-text
+                          "=======\n"
+                          "\n>>>>>>> END REMOVED REGION\n"))
+          (smerge-mode 1))
+      (delete-region from to))))
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-buffer-tools-maybe-safe
@@ -286,12 +314,23 @@ If there is no window in that direction, return nil."
   (eai-tool-library--buffer-modify-confirm-p buffer))
 
 (defun eai-tool-library-buffer--insert-at (buffer at text)
-  "Move point in buffer BUFFER to AT, and then insert TEXT"
+  "Move point in buffer BUFFER to AT, and then insert TEXT.
+
+When `eai-code-edit-style' is `review', wraps the inserted text
+in smerge-style markers instead of inserting directly."
   (eai-tool-library--debug-log (format "insert-at %s at %s in %s" text at buffer))
   (with-current-buffer (eai-tool-library--get-buffer buffer)
     (eai-tool-library-write-deny-check (buffer-file-name))
     (goto-char (+ 1 at))
-    (insert text)))
+    (if (eq eai-code-edit-style 'review)
+        (progn
+          (insert (concat "<<<<<<< INSERTED AT POSITION "
+                          (number-to-string at) "\n"
+                          text
+                          "\n=======\n"
+                          ">>>>>>> END INSERT\n"))
+          (smerge-mode 1))
+      (insert text))))
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-buffer-tools

@@ -218,6 +218,19 @@
                                          ("/tmp" . allow))))
     (should (eq 'allow (eai-tool-library-write-action "/tmp/etl-write-policy-test.txt")))))
 
+(ert-deftest etl-core/write-action/protected-file-always-deny ()
+  "Files in `eai-tool-library-write-protected-files' are always denied."
+  (let ((eai-tool-library-write-policy '(("/tmp" . allow)))
+        (eai-tool-library-write-outside-project 'allow))
+    ;; Even with /tmp set to allow, .eai-code-confirm is denied
+    (should (eq 'deny (eai-tool-library-write-action "/tmp/.eai-code-confirm")))
+    (should (eq 'deny (eai-tool-library-write-action "/home/user/project/.eai-code-confirm")))))
+
+(ert-deftest etl-core/write-action/protected-file-overrides-policy ()
+  "Protected files override even explicit allow policies."
+  (let ((eai-tool-library-write-policy '(("/" . allow))))
+    (should (eq 'deny (eai-tool-library-write-action "/.eai-code-confirm")))))
+
 ;;; eai-tool-library-write-confirm-p
 
 (ert-deftest etl-core/write-confirm-p/ask-returns-t ()
