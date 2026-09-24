@@ -251,8 +251,9 @@ If BUFFER-OR-PATH is a string path, searches for a matching buffer by:
 1. Exact file path match
 2. Suffix match (BUFFER-OR-PATH is a trailing segment of the buffer's path)
 3. Basename match (filename component only)
-If no buffer exists, opens or creates the file resolved against the
-project root.
+If no buffer exists, opens or creates the file resolved against the project
+root. A string naming no file but a live non-file buffer, such as *scratch*,
+returns that buffer.
 
 If CREATE-P is non-nil and the file doesn't exist, creates it.
 
@@ -286,14 +287,16 @@ Returns the buffer object."
                                (when (string= basename (file-name-nondirectory bfn))
                                  (throw 'found buf)))))))))
       (or buffer
-          (if (file-exists-p resolved-path)
-              (find-file-noselect resolved-path)
-            (if create-p
-                (let ((buf (generate-new-buffer (file-name-nondirectory resolved-path))))
-                  (with-current-buffer buf
-                    (set-visited-file-name resolved-path))
-                  buf)
-              (error "File %s does not exist" resolved-path))))))))
+          (and (file-exists-p resolved-path)
+               (find-file-noselect resolved-path))
+          ;; not a file: a live non-file buffer such as *scratch*, by name
+          (get-buffer buffer-or-path)
+          (if create-p
+              (let ((buf (generate-new-buffer (file-name-nondirectory resolved-path))))
+                (with-current-buffer buf
+                  (set-visited-file-name resolved-path))
+                buf)
+            (error "File %s does not exist" resolved-path)))))))
 
 (provide 'eai-tool-library)
 
