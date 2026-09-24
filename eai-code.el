@@ -131,11 +131,13 @@ A blank canvas so far.
 
 (defface eai-code-user-prompt
   '((t :inherit font-lock-keyword-face :weight bold))
-  "Face for the @developer: user prompt prefix.")
+  "Face for the @developer: user prompt prefix."
+  :group 'eai-code)
 
 (defface eai-code-response-prompt
   '((t :inherit font-lock-type-face :weight bold))
-  "Face for the @code monkey: response prefix.")
+  "Face for the @code monkey: response prefix."
+  :group 'eai-code)
 
 (defvar-local eai-code--request-active nil
   "Non-nil when a request is in flight in the current buffer.")
