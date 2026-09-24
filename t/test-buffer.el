@@ -73,16 +73,23 @@ The buffer is killed after BODY completes."
       (should (string= ""
                        (eai-tool-library-buffer--read-buffer-contents "*etl-test-read-empty*"))))))
 
-(ert-deftest etl-buffer/read-contents/creates-missing-buffer ()
-  "Creates the buffer if it does not exist."
-  (let ((bufname "*etl-test-read-create-xyz*")
-        (eai-tool-library-max-result-size 200))
+(ert-deftest etl-buffer/read-contents/missing-buffer-errors ()
+  "A name that is neither a file nor a live buffer errors and creates nothing."
+  (let ((bufname "*etl-test-read-missing-xyz*"))
     (when (get-buffer bufname) (kill-buffer bufname))
+    (should-error (eai-tool-library-buffer--read-buffer-contents bufname))
+    (should-not (get-buffer bufname))))
+
+(ert-deftest etl-buffer/read-contents/visits-file-path ()
+  "A file path is visited instead of creating an empty non-file buffer."
+  (let ((file (make-temp-file "etl-read-" nil ".txt" "file contents"))
+        (eai-tool-library-max-result-size 200))
     (unwind-protect
-        (progn
-          (eai-tool-library-buffer--read-buffer-contents bufname)
-          (should (get-buffer bufname)))
-      (when (get-buffer bufname) (kill-buffer bufname)))))
+        (should (equal (eai-tool-library-buffer--read-buffer-contents file)
+                       "file contents"))
+      (when-let* ((buf (find-buffer-visiting file)))
+        (kill-buffer buf))
+      (delete-file file))))
 
 (ert-deftest etl-buffer/read-contents/over-limit ()
   "Returns limit-exceeded message when content exceeds max-result-size."

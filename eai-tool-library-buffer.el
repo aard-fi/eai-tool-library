@@ -64,7 +64,7 @@ the LLM behaves.")
   "Return contents of BUFFER."
   (eai-tool-library--debug-log (format "read-buffer-contents %s" buffer))
   (eai-tool-library--limit-result
-   (let ((buffer (get-buffer-create buffer)))
+   (let ((buffer (eai-tool-library--get-buffer buffer)))
      (with-current-buffer buffer
        (concat (buffer-substring-no-properties (point-min) (point-max)))))))
 
@@ -72,7 +72,7 @@ the LLM behaves.")
  'eai-tool-library-buffer-tools
  :function #'eai-tool-library-buffer--read-buffer-contents
  :name  "read-buffer-contents"
- :description "Read a buffers contents. If the buffer does not exist create it, and return an empty string. After calling this tool, stop. Then continue fulfilling user's request."
+ :description "Read a buffers contents. The buffer may be a buffer name or a file path; files are opened if needed. After calling this tool, stop. Then continue fulfilling user's request."
  :args (list '(:name "buffer"
                      :type string
                      :description "The buffer to retrieve contents from."))
@@ -82,7 +82,7 @@ the LLM behaves.")
   "Return contents of BUFFER region from FROM to TO."
   (eai-tool-library--debug-log (format "read-buffer-region %s %s->%s" buffer from to))
   (eai-tool-library--limit-result
-   (let ((buffer (get-buffer-create buffer)))
+   (let ((buffer (eai-tool-library--get-buffer buffer)))
      (with-current-buffer buffer
        (concat (buffer-substring-no-properties from to))))))
 
@@ -90,7 +90,7 @@ the LLM behaves.")
  'eai-tool-library-buffer-tools
  :function #'eai-tool-library-buffer--read-buffer-region
  :name  "read-buffer-region"
- :description "Read a region of a buffer. If the buffer does not exist create it, and return an empty string. After calling this tool, stop. Then continue fulfilling user's request."
+ :description "Read a region of a buffer. The buffer may be a buffer name or a file path; files are opened if needed. After calling this tool, stop. Then continue fulfilling user's request."
  :args (list '(:name "buffer"
                      :type string
                      :description "The buffer to retrieve contents from.")
@@ -107,11 +107,11 @@ the LLM behaves.")
 (defun eai-tool-library-buffer--read-buffer-contents-since-last-read (buffer)
   "Return contents of BUFFER since last read, or all buffer on first read."
   (eai-tool-library--debug-log (format "read-buffer-contents-since-last-read %s" buffer))
-  (with-current-buffer buffer
+  (with-current-buffer (eai-tool-library--get-buffer buffer)
     (unless (local-variable-p 'eai-tool-library-buffer--last-read-pos)
       (make-local-variable 'eai-tool-library-buffer--last-read-pos)
       (setq eai-tool-library-buffer--last-read-pos (point-min)))
-    (let ((_buffer (get-buffer-create buffer))
+    (let ((_buffer (eai-tool-library--get-buffer buffer))
           (last-pos eai-tool-library-buffer--last-read-pos))
       (setq eai-tool-library-buffer--last-read-pos (point-max))
       (message (format "Last read %s->%s" last-pos eai-tool-library-buffer--last-read-pos))
@@ -121,7 +121,7 @@ the LLM behaves.")
  'eai-tool-library-buffer-tools
  :function #'eai-tool-library-buffer--read-buffer-contents-since-last-read
  :name  "read-buffer-contents-since-last-read"
- :description "Read content added to a buffer since last reading it. On first read, return complete buffer contents If the buffer does not exist create it, and return an empty string. This assumes buffers which only get appended to - don't try to edit a buffer read with this tool. After calling this tool, stop. Then continue fulfilling user's request."
+ :description "Read content added to a buffer since last reading it. On first read, return complete buffer contents. The buffer may be a buffer name or a file path; files are opened if needed. This assumes buffers which only get appended to - don't try to edit a buffer read with this tool. After calling this tool, stop. Then continue fulfilling user's request."
  :args (list '(:name "buffer"
                      :type string
                      :description "The buffer to retrieve contents from."))
@@ -129,14 +129,14 @@ the LLM behaves.")
 
 (defun eai-tool-library-buffer--set-buffer-pos (buffer pos)
   "Set the last read position for buffer."
-  (with-current-buffer buffer
+  (with-current-buffer (eai-tool-library--get-buffer buffer)
     (unless (local-variable-p 'eai-tool-library-buffer--last-read-pos)
       (make-local-variable 'eai-tool-library-buffer--last-read-pos))
     (setq eai-tool-library-buffer--last-read-pos pos)))
 
 (defun eai-tool-library-buffer--get-buffer-pos (buffer)
   "Get the last read position for buffer."
-  (with-current-buffer buffer
+  (with-current-buffer (eai-tool-library--get-buffer buffer)
     (unless (local-variable-p 'eai-tool-library-buffer--last-read-pos)
       (make-local-variable 'eai-tool-library-buffer--last-read-pos)
       (setq eai-tool-library-buffer--last-read-pos (point-min)))
@@ -189,7 +189,7 @@ If there is no window in that direction, return nil."
 (defun eai-tool-library-buffer--erase-buffer (buffer)
   "Erase contents of BUFFER."
   (eai-tool-library--debug-log (format "erase-buffer %s" buffer))
-  (let ((buffer (get-buffer-create buffer)))
+  (let ((buffer (eai-tool-library--get-buffer buffer)))
     (with-current-buffer buffer
       (erase-buffer))))
 
@@ -197,7 +197,7 @@ If there is no window in that direction, return nil."
  'eai-tool-library-buffer-tools-maybe-safe
  :function #'eai-tool-library-buffer--erase-buffer
  :name  "erase-buffer"
- :description "Erase buffers contents. If the buffer does not exist create it, and return an empty string. Note: editing Elisp code in a buffer only changes the buffer text, it does NOT update the running function definitions. To make changes take effect, the user must re-evaluate the modified definitions. Do not attempt to call the modified function immediately after editing its source to verify the edit. After calling this tool, stop. Then continue fulfilling user's request."
+ :description "Erase buffers contents. The buffer may be a buffer name or a file path; files are opened if needed. Note: editing Elisp code in a buffer only changes the buffer text, it does NOT update the running function definitions. To make changes take effect, the user must re-evaluate the modified definitions. Do not attempt to call the modified function immediately after editing its source to verify the edit. After calling this tool, stop. Then continue fulfilling user's request."
  :args (list '(:name "buffer"
                      :type string
                      :description "The buffer to erase contents in."))
@@ -206,7 +206,7 @@ If there is no window in that direction, return nil."
 (defun eai-tool-library-buffer--buffer-size (buffer)
   "Return the size of BUFFER."
   (eai-tool-library--debug-log (format "buffer-size %s" buffer))
-  (let ((buffer (get-buffer-create buffer)))
+  (let ((buffer (eai-tool-library--get-buffer buffer)))
     (with-current-buffer buffer
       (buffer-size))))
 
@@ -214,7 +214,7 @@ If there is no window in that direction, return nil."
  'eai-tool-library-buffer-tools
  :function #'eai-tool-library-buffer--buffer-size
  :name  "buffer-size"
- :description "Read a buffers contents. If the buffer does not exist create it first. After calling this tool, stop. Then continue fulfilling user's request."
+ :description "Return the size of a buffer in characters. The buffer may be a buffer name or a file path; files are opened if needed. After calling this tool, stop. Then continue fulfilling user's request."
  :args (list '(:name "buffer"
                      :type string
                      :description "The buffer to get the size from."))
@@ -223,7 +223,7 @@ If there is no window in that direction, return nil."
 (defun eai-tool-library-buffer--replace-region (buffer from to text)
   "Replace text in BUFFER from FROM to TO with TEXT"
   (eai-tool-library--debug-log (format "replace-region %s->%s in %s with %s" from to buffer text))
-  (with-current-buffer buffer
+  (with-current-buffer (eai-tool-library--get-buffer buffer)
     (delete-region from to)
     (goto-char from)
     (insert text)))
@@ -232,7 +232,7 @@ If there is no window in that direction, return nil."
  'eai-tool-library-buffer-tools-maybe-safe
  :function #'eai-tool-library-buffer--replace-region
  :name  "replace-region"
- :description "Replace a region in a buffer with new text. If the buffer does not exist create it, and return an empty string. Note: editing Elisp code in a buffer only changes the buffer text, it does NOT update the running function definitions. To make changes take effect, the user must re-evaluate the modified definitions. Do not attempt to call the modified function immediately after editing its source to verify the edit. After calling this tool, stop. Then continue fulfilling user's request."
+ :description "Replace a region in a buffer with new text. The buffer may be a buffer name or a file path; files are opened if needed. Note: editing Elisp code in a buffer only changes the buffer text, it does NOT update the running function definitions. To make changes take effect, the user must re-evaluate the modified definitions. Do not attempt to call the modified function immediately after editing its source to verify the edit. After calling this tool, stop. Then continue fulfilling user's request."
  :args (list '(:name "buffer"
                      :type string
                      :description "The buffer to replace contents in.")
@@ -250,14 +250,14 @@ If there is no window in that direction, return nil."
 (defun eai-tool-library-buffer--remove-region (buffer from to)
   "Remove region from FROM to TO in buffer BUFFER"
   (eai-tool-library--debug-log (format "remove-region %s->%s from %s" from to buffer))
-  (with-current-buffer buffer
+  (with-current-buffer (eai-tool-library--get-buffer buffer)
     (delete-region from to)))
 
 (eai-tool-library-make-tools-and-register
  'eai-tool-library-buffer-tools-maybe-safe
  :function #'eai-tool-library-buffer--remove-region
  :name  "remove-region"
- :description "Remove a region in a buffer. If the buffer does not exist create it, and return an empty string. Note: editing Elisp code in a buffer only changes the buffer text, it does NOT update the running function definitions. To make changes take effect, the user must re-evaluate the modified definitions. Do not attempt to call the modified function immediately after editing its source to verify the edit. After calling this tool, stop. Then continue fulfilling user's request."
+ :description "Remove a region in a buffer. The buffer may be a buffer name or a file path; files are opened if needed. Note: editing Elisp code in a buffer only changes the buffer text, it does NOT update the running function definitions. To make changes take effect, the user must re-evaluate the modified definitions. Do not attempt to call the modified function immediately after editing its source to verify the edit. After calling this tool, stop. Then continue fulfilling user's request."
  :args (list '(:name "buffer"
                      :type string
                      :description "The buffer to remove contents in.")
@@ -272,7 +272,7 @@ If there is no window in that direction, return nil."
 (defun eai-tool-library-buffer--insert-at (buffer at text)
   "Move point in buffer BUFFER to AT, and then insert TEXT"
   (eai-tool-library--debug-log (format "insert-at %s at %s in %s" text at buffer))
-  (with-current-buffer buffer
+  (with-current-buffer (eai-tool-library--get-buffer buffer)
     (goto-char (+ 1 at))
     (insert text)))
 
@@ -280,7 +280,7 @@ If there is no window in that direction, return nil."
  'eai-tool-library-buffer-tools
  :function #'eai-tool-library-buffer--insert-at
  :name  "insert-at"
- :description "Insert text in a buffer at a specific location. If the buffer does not exist create it, and return an empty string. Note: editing Elisp code in a buffer only changes the buffer text, it does NOT update the running function definitions. To make changes take effect, the user must re-evaluate the modified definitions. Do not attempt to call the modified function immediately after editing its source to verify the edit. After calling this tool, stop. Then continue fulfilling user's request."
+ :description "Insert text in a buffer at a specific location. The buffer may be a buffer name or a file path; files are opened if needed. Note: editing Elisp code in a buffer only changes the buffer text, it does NOT update the running function definitions. To make changes take effect, the user must re-evaluate the modified definitions. Do not attempt to call the modified function immediately after editing its source to verify the edit. After calling this tool, stop. Then continue fulfilling user's request."
  :args (list '(:name "buffer"
                      :type string
                      :description "The buffer to add contents to.")
