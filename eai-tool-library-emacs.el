@@ -69,5 +69,33 @@
                      :optional t))
  :category "emacs")
 
+(defun eai-tool-library-emacs--save-buffer (&optional buffer-name)
+  "Save BUFFER-NAME to its associated file.
+BUFFER-NAME is a string or buffer object. If nil, use the current
+buffer. Returns the file path saved, or an error message if the
+buffer has no file association."
+  (eai-tool-library--debug-log (format "save-buffer %s" buffer-name))
+  (let ((buffer (if buffer-name
+                    (get-buffer buffer-name)
+                  (current-buffer))))
+    (with-current-buffer buffer
+      (if (not (buffer-file-name))
+          (error "Buffer %s has no associated file; use write-file instead"
+                 (buffer-name buffer))
+        (let ((file (buffer-file-name)))
+          (save-buffer)
+          (format "Saved %s to %s" (buffer-name buffer) file))))))
+
+(eai-tool-library-make-tools-and-register
+ 'eai-tool-library-emacs-tools
+ :function #'eai-tool-library-emacs--save-buffer
+ :name  "save-buffer"
+ :description "Save a buffer to its associated file. Returns the file path on success. Use this after creating or modifying a file buffer."
+ :args (list '(:name "buffer-name"
+                     :type string
+                     :description "Name of the buffer to save. Uses current buffer if omitted."
+                     :optional t))
+ :category "emacs")
+
 (provide 'eai-tool-library-emacs)
 ;;; eai-tool-library-emacs.el ends here
