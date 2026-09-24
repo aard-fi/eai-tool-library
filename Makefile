@@ -5,13 +5,15 @@ ALL: test
 .PHONY: clean lisp tests
 
 clean:
-	@$(MAKE) -C lisp clean
+	@rm -f *.elc
 
 %.elc: %.el
-	emacs -batch -Q -L . -f batch-byte-compile $<
+	@$(EMACS) -batch -Q -L deps -L . -f batch-byte-compile $<
+
+compile: byte-compile
 
 byte-compile:
-	@$(EMACS) -Q -L . --batch -f batch-byte-compile *.el
+	@$(EMACS) -Q -L deps -L . --batch -f batch-byte-compile *.el
 
 lisp:
 	@$(MAKE) -C lisp
